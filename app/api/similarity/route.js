@@ -25,12 +25,9 @@ function cosineSimilarity(vec1, vec2) {
 // POST handler for the embeddings API
 export async function POST(req) {
   try {
-    const { text, query, topK = 5 } = await req.json();
-    if (!text && !query) {
-      return NextResponse.json(
-        { error: "Text or query is required" },
-        { status: 400 }
-      );
+    const { query, topK = 3 } = await req.json();
+    if (!query) {
+      return NextResponse.json({ error: "Query is required" }, { status: 400 });
     }
 
     await connectToDatabase();
@@ -40,51 +37,37 @@ export async function POST(req) {
       "sentence-transformers/all-MiniLM-L6-v2"
     );
 
-    if (text) {
-      const embeddings = await embedder(text, {
-        pooling: "mean",
-        normalize: true,
-      });
-      const vector = Array.isArray(embeddings[0])
-        ? embeddings[0]
-        : Array.from(embeddings[0]);
+    // Generate query embedding
+    const queryEmbedding = await embedder(query, {
+      pooling: "mean",
+      normalize: true,
+    });
+    const queryVector = Array.isArray(queryEmbedding[0])
+      ? queryEmbedding[0]
+      : Array.from(queryEmbedding[0]);
 
-      const savedEmbedding = await Embedding.create({ text, vector });
-      return NextResponse.json(
-        { success: true, data: savedEmbedding },
-        { status: 201 }
-      );
-    }
+    // Retrieve stored embeddings from MongoDB
+    const storedEmbeddings = await Embedding.find();
 
-    if (query) {
-      const queryEmbedding = await embedder(query, {
-        pooling: "mean",
-        normalize: true,
-      });
-      const queryVector = Array.isArray(queryEmbedding[0])
-        ? queryEmbedding[0]
-        : Array.from(queryEmbedding[0]);
+    // Find the most similar content
+    const results = storedEmbeddings
+      .map((doc) => {
+        const score = cosineSimilarity(queryVector, doc.vector);
+        return {
+          text: doc.text,
+          score: isNaN(score) ? 0 : score,
+        };
+      })
+      .filter((result) => result.score > 0); // Filter out zero scores
 
-      const storedEmbeddings = await Embedding.find();
+    // Sort and get the top K results
+    results.sort((a, b) => b.score - a.score);
+    const topResults = results.slice(0, topK);
 
-      const results = storedEmbeddings
-        .map((doc) => {
-          const score = cosineSimilarity(queryVector, doc.vector);
-          return {
-            text: doc.text,
-            score: isNaN(score) ? 0 : score,
-          };
-        })
-        .filter((result) => result.score > 0); // Filter out zero scores
-
-      results.sort((a, b) => b.score - a.score);
-      const topResults = results.slice(0, topK);
-
-      return NextResponse.json(
-        { success: true, results: topResults },
-        { status: 200 }
-      );
-    }
+    return NextResponse.json(
+      { success: true, results: topResults },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Error performing similarity search:", error);
     return NextResponse.json(
