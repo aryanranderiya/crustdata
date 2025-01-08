@@ -22,23 +22,30 @@ function cosineSimilarity(vec1, vec2) {
   return dotProduct / (magnitude1 * magnitude2 + 1e-8);
 }
 
-// POST handler for the embeddings API
+/**
+ * POST handler to fetch stored embeddings and pass them to the LLM along with user data.
+ */
 export async function POST(req) {
   try {
-    const { query, topK = 15 } = await req.json();
-    if (!query) {
-      return NextResponse.json({ error: "Query is required" }, { status: 400 });
+    const { prompt, topK = 10 } = await req.json(); // Assuming userData is passed in the request body
+
+    if (!prompt) {
+      return NextResponse.json(
+        { error: "User data (prompt) is required" },
+        { status: 400 }
+      );
     }
 
     await connectToDatabase();
 
+    // Use Huggingface pipeline to generate the embedding for the prompt
     const embedder = await pipeline(
       "feature-extraction",
       "sentence-transformers/all-MiniLM-L6-v2"
     );
 
     // Generate query embedding
-    const queryEmbedding = await embedder(query, {
+    const queryEmbedding = await embedder(prompt, {
       pooling: "mean",
       normalize: true,
     });
@@ -49,7 +56,7 @@ export async function POST(req) {
     // Retrieve stored embeddings from MongoDB
     const storedEmbeddings = await Embedding.find();
 
-    // Find the most similar content
+    // Find the most similar content using cosine similarity
     const results = storedEmbeddings
       .map((doc) => {
         const score = cosineSimilarity(queryVector, doc.vector);
@@ -64,8 +71,42 @@ export async function POST(req) {
     results.sort((a, b) => b.score - a.score);
     const topResults = results.slice(0, topK);
 
+    console.log(
+      `Question: ${prompt}. Top Contexts: ${JSON.stringify(topResults)}`
+    );
+
+    // Prepare the request payload for the LLM
+    const llmPayload = {
+      stream: "false",
+      temperature: 0.6,
+      max_tokens: 4096,
+      messages: [
+        {
+          role: "user",
+          content: `Question: ${prompt}. Context: ${JSON.stringify(
+            topResults
+          )}`.slice(0, 131_000),
+        },
+      ],
+    };
+
+    const llmResponse = await fetch(
+      "https://llm.aryanranderiya1478.workers.dev/",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(llmPayload),
+      }
+    );
+
+    if (!llmResponse.ok) {
+      throw new Error(`LLM Error: ${llmResponse.statusText}`);
+    }
+
+    const llmData = await llmResponse.json();
+
     return NextResponse.json(
-      { success: true, results: topResults },
+      { success: true, llmResponse: llmData },
       { status: 200 }
     );
   } catch (error) {

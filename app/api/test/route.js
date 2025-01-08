@@ -5,6 +5,32 @@ import { pipeline } from "@huggingface/transformers";
 import fs from "fs/promises";
 import path from "path";
 
+// Function to chunk text into smaller parts based on the max token limit
+function chunkText(text, maxTokens) {
+  const words = text.split(" "); // Split text into words
+  const chunks = [];
+  let currentChunk = "";
+
+  for (let word of words) {
+    // If adding the word exceeds maxTokens, start a new chunk
+    if ((currentChunk + " " + word).length > maxTokens) {
+      if (currentChunk.length > 0) {
+        chunks.push(currentChunk.trim());
+      }
+      currentChunk = word; // Start a new chunk with the current word
+    } else {
+      currentChunk += " " + word;
+    }
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.trim()); // Add the last chunk
+  }
+
+  return chunks;
+}
+
+// Function to process and generate embeddings
 export async function loadAndProcessJSON() {
   try {
     // Connect to MongoDB
@@ -23,25 +49,44 @@ export async function loadAndProcessJSON() {
       "sentence-transformers/all-MiniLM-L6-v2"
     );
 
+    // Define the max number of tokens per chunk (adjust this based on model's limit)
+    const maxTokens = 512; // Example max tokens per chunk (adjust according to model limit)
+
     // Process each section and save to MongoDB
     for (const section of data) {
-      const text =
-        `${section.header} ` + section.content.map((c) => c.text).join(" ");
-      console.log(`Processing: ${section.header}`);
+      const header = section.header;
+      const contentText = section.content.map((c) => c.text).join(" ");
+      console.log(`Processing: ${header}`);
 
-      // Generate embeddings
-      const embeddings = await embedder(text, {
-        pooling: "mean",
-        normalize: true,
-      });
+      // Chunk the content text into smaller parts
+      const contentChunks = chunkText(contentText, maxTokens - header.length);
 
-      // Flatten embeddings
-      const vector = Array.isArray(embeddings)
-        ? embeddings[0]
-        : Array.from(embeddings[0]);
+      // Add the header to each chunk
+      const chunksWithHeader = contentChunks.map(
+        (chunk) => `${header} ${chunk}`
+      );
 
-      // Save to MongoDB
-      await Embedding.create({ text, vector });
+      console.log(`Total chunks for "${header}": ${chunksWithHeader.length}`);
+
+      // Process each chunk with header included
+      for (let chunk of chunksWithHeader) {
+        // Generate embeddings for each chunk
+        const embeddings = await embedder(chunk, {
+          pooling: "mean",
+          normalize: true,
+        });
+
+        // Flatten the embedding tensor
+        const vector = Array.isArray(embeddings)
+          ? embeddings[0]
+          : Array.from(embeddings[0]);
+
+        // Save the embedding and text to MongoDB
+        await Embedding.create({
+          text: chunk, // Save the chunk text
+          vector: vector, // Save the vector for this chunk
+        });
+      }
     }
 
     console.log("Data upload complete.");
@@ -53,7 +98,7 @@ export async function loadAndProcessJSON() {
 // POST handler for the embeddings API
 export async function GET(req) {
   try {
-    loadAndProcessJSON();
+    await loadAndProcessJSON();
     // Return the stored data
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {
