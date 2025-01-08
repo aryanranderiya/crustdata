@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import connectToDatabase from "@/lib/mongodb";
-import Embedding from "@/models/Embedding";
+import Embedding from "@/models/embedding";
 import { pipeline } from "@huggingface/transformers";
 import fs from "fs/promises";
 import path from "path";
