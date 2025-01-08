@@ -71,10 +71,6 @@ export async function POST(req) {
     results.sort((a, b) => b.score - a.score);
     const topResults = results.slice(0, topK);
 
-    console.log(
-      `Question: ${prompt}. Top Contexts: ${JSON.stringify(topResults)}`
-    );
-
     // Prepare the request payload for the LLM
     const llmPayload = {
       stream: "false",
@@ -82,10 +78,15 @@ export async function POST(req) {
       max_tokens: 4096,
       messages: [
         {
+          role: "system",
+          content: `Provide the user with appropriately formatted Markdown and short, concise.`,
+        },
+        {
           role: "user",
-          content: `Question: ${prompt}. Context: ${JSON.stringify(
-            topResults
-          )}`.slice(0, 131_000),
+          content:
+            `Question: ${prompt}. Context for their question: ${JSON.stringify(
+              topResults
+            )}`.slice(0, 131_000),
         },
       ],
     };
