@@ -1,6 +1,0 @@
-POST https://jubilant-space-rotary-phone-j9j7w4v6p5ph5q75-3000.app.github.dev/api/embeddings HTTP/1.1
-content-type: application/json
-
-{
-    "text": "sample",
-}
