@@ -43,7 +43,7 @@ export default function ChatComponent() {
               <div
                 className={`py-3 px-5 rounded-2xl max-w-[80%] ${
                   message.role === "user"
-                    ? "bg-[#00bbff] text-white"
+                  ? "bg-[#00bbff] text-white"
                     : message === errorMessage
                     ? "bg-red-200 text-red-700"
                     : "bg-gray-700 text-white"

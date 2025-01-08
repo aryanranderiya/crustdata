@@ -1,6 +1,4 @@
-export interface IconProps extends React.SVGProps<SVGSVGElement> {}
-
-export const Task01Icon: React.FC<IconProps> = (props) => (
+export const Task01Icon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
@@ -30,7 +28,9 @@ export const Task01Icon: React.FC<IconProps> = (props) => (
   </svg>
 );
 
-export const TaskDone01Icon = (props: React.SVGProps<SVGSVGElement>) => (
+export const TaskDone01Icon: React.FC<React.SVGProps<SVGSVGElement>> = (
+  props
+) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"

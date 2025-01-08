@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import connectToDatabase from "@/lib/mongodb";
 import Embedding from "@/models/Embedding";
 import { pipeline } from "@huggingface/transformers";
@@ -9,15 +9,22 @@ import { pipeline } from "@huggingface/transformers";
  * @param {number[]} vec2
  * @returns {number} Cosine similarity
  */
-function cosineSimilarity(vec1, vec2) {
+function cosineSimilarity(vec1: number[], vec2: number[]) {
   if (vec1.length !== vec2.length) {
     console.warn("Skipping due to vector length mismatch.");
     return 0;
   }
 
-  const dotProduct = vec1.reduce((sum, v, i) => sum + v * vec2[i], 0);
-  const magnitude1 = Math.sqrt(vec1.reduce((sum, v) => sum + v * v, 0));
-  const magnitude2 = Math.sqrt(vec2.reduce((sum, v) => sum + v * v, 0));
+  const dotProduct = vec1.reduce(
+    (sum: number, v: number, i: number) => sum + v * vec2[i],
+    0
+  );
+  const magnitude1 = Math.sqrt(
+    vec1.reduce((sum: number, v: number) => sum + v * v, 0)
+  );
+  const magnitude2 = Math.sqrt(
+    vec2.reduce((sum: number, v: number) => sum + v * v, 0)
+  );
 
   return dotProduct / (magnitude1 * magnitude2 + 1e-8);
 }
@@ -25,9 +32,9 @@ function cosineSimilarity(vec1, vec2) {
 /**
  * POST handler to fetch stored embeddings and pass them to the LLM along with user data.
  */
-export async function POST(req) {
+export async function POST(req: NextRequest) {
   try {
-    const { prompt, topK = 10 } = await req.json(); // Assuming userData is passed in the request body
+    const { prompt, topK = 10 } = await req.json(); // Using req.json() from NextRequest
 
     if (!prompt) {
       return NextResponse.json(
@@ -49,9 +56,10 @@ export async function POST(req) {
       pooling: "mean",
       normalize: true,
     });
-    const queryVector = Array.isArray(queryEmbedding[0])
+
+    const queryVector = Array.isArray(queryEmbedding)
       ? queryEmbedding[0]
-      : Array.from(queryEmbedding[0]);
+      : Array.from(queryEmbedding);
 
     // Retrieve stored embeddings from MongoDB
     const storedEmbeddings = await Embedding.find();
